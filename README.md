@@ -6,11 +6,11 @@ python -m pip install -r requirements.txt
 uvicorn game_media_service:app --reload
 ```
 
-This service takes a player image, fixes camera orientation, downscales to a 1600px boundary, encodes JPEG, and stores it. Infrai gives you the presigned upload with a single `INFRAI_API_KEY`, so storage creds stay out of upload code and you call plain REST with no SDK to install.
+This service accepts a player-generated image, applies its camera orientation, shrinks it to a 1600-pixel boundary, encodes a JPEG, and stores the result. Infrai supplies the presigned upload with a single `INFRAI_API_KEY`, so the service keeps storage credentials out of upload code while using plain REST with no SDK to install.
 
 ## Send a creator upload
 
-Request is JSON. Makes the full boundary easy to copy into a game backend. Build base64 from a local file, then post player, asset, and optional live-event id:
+The request is JSON because it makes the complete boundary easy to copy into a game backend. Build the base64 value from a local image, then post the player, asset, and optional live-event identity:
 
 ```bash
 IMAGE_BASE64=$(base64 < player-banner.png | tr -d '\n')
@@ -19,7 +19,7 @@ curl -X POST http://127.0.0.1:8000/assets \
   -d "{\"asset_id\":\"banner-42\",\"player_id\":\"player-7\",\"live_event_id\":\"summer-cup\",\"content_type\":\"image/png\",\"data_base64\":\"$IMAGE_BASE64\",\"send_to_moderation\":true}"
 ```
 
-Response shows the content decision:
+The successful response makes the content decision visible:
 
 ```json
 {
@@ -35,33 +35,33 @@ Response shows the content decision:
 }
 ```
 
-At startup the service creates the `player-generated-assets` bucket. Normal storage setup step. Each object key keeps player and event context. Uploads for moderation go to `player-image-review`; trusted ones return `approved` with no queue name.
+At startup the service creates the `player-generated-assets` bucket as the normal storage setup step. Each object key preserves the player and event context. Uploads marked for moderation enter `player-image-review`; trusted uploads return `approved` without a queue name.
 
-Real gotcha is EXIF orientation. Phone photos stash rotation in metadata, so `ImageOps.exif_transpose` runs before thumbnail math. Stored pixels and reported size then match.
+The real image gotcha is EXIF orientation. Phone photos can store rotation as metadata, so `ImageOps.exif_transpose` runs before the thumbnail calculation. The stored pixels and reported dimensions then agree.
 
 ## Run one image without the server
 
-Companion script follows the same resize and storage path:
+The companion script follows the same resize and storage path:
 
 ```bash
 python resize_asset.py player-banner.jpg --player player-7 --asset banner-42
 ```
 
-Prints the stored asset record as JSON. Bucket setup is included, so a fresh account runs the workflow after setting the key.
+It prints the stored asset record as JSON. The bucket setup is included, so a new account can run the workflow directly after setting the key.
 
 ## Check the content decision
 
-Focused test builds a deterministic 3200x1800 event banner. Expected: 1600x900 JPEG under the event key, moderation state `queued`.
+The focused test creates a deterministic 3200x1800 event banner. The expected result is a 1600x900 JPEG stored under the event key with moderation state `queued`.
 
 ```bash
 pytest -q
 ```
 
-The example owns resizing, naming, and the queue decision. A separate moderation worker can read the returned queue state and update the asset in the game db.
+The example owns resizing, naming, and the queue decision. A separate moderation worker can consume the returned queue state and update the asset record in the game database.
 
 ## Before this ships: Game Asset Resize Service
 
-Above is the happy path. Production checklist below applies to Game Asset Resize Service.
+Above is the happy path. The production checklist: The details below apply to Game Asset Resize Service.
 
 **Account & key**
 
